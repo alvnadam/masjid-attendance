@@ -4,12 +4,21 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
 
+// ✅ Interface untuk data yang disimpan di state (domain model)
 interface AbsensiRecord {
   id?: number;
   waktu: string;
   jamaah?: {
     nama: string;
-  };
+  } | null;
+}
+
+// ✅ Interface untuk raw response dari Supabase (DTO - Data Transfer Object)
+// Supabase bisa return jamaah sebagai object ATAU array tergantung tipe relasi
+interface AbsensiRaw {
+  id?: number;
+  waktu: string;
+  jamaah: { nama: string } | { nama: string }[] | null;
 }
 
 type LoadingState = 'loading' | 'success' | 'error' | 'empty';
@@ -54,7 +63,16 @@ export default function Home() {
         return;
       }
 
-      setData(data);
+      // ✅ Normalisasi data: handle jamaah sebagai array atau object
+      const normalized: AbsensiRecord[] = (data as AbsensiRaw[]).map((item) => ({
+        id: item.id,
+        waktu: item.waktu,
+        jamaah: Array.isArray(item.jamaah)
+          ? item.jamaah[0] ?? null   // relasi one-to-many: ambil elemen pertama
+          : item.jamaah ?? null,     // relasi one-to-one: pakai langsung
+      }));
+
+      setData(normalized);
       setStatus('success');
     } catch (err) {
       setErrorMessage(
@@ -86,8 +104,8 @@ export default function Home() {
         className="border-b border-gray-700 px-6 py-3 flex items-center justify-between"
       >
         <div className="flex items-center gap-4">
-          <img 
-            src="/logo_masjid_makan_makan.png" 
+          <img
+            src="/logo_masjid_makan_makan.png"
             alt="Logo Masjid Makan-Makan"
             className="h-14 w-auto"
           />
@@ -101,8 +119,6 @@ export default function Home() {
           </div>
         </div>
       </nav>
-
-
 
       {/* CONTENT */}
       <main className="max-w-6xl mx-auto px-6 py-10">
@@ -312,7 +328,10 @@ export default function Home() {
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
-                  <tr style={{ backgroundColor: 'rgba(212, 175, 55, 0.05)', borderBottomColor: THEME.gold }} className="border-b">
+                  <tr
+                    style={{ backgroundColor: 'rgba(212, 175, 55, 0.05)', borderBottomColor: THEME.gold }}
+                    className="border-b"
+                  >
                     <th style={{ color: THEME.gold }} className="px-6 py-4 text-left text-sm font-semibold">
                       NO
                     </th>
@@ -330,7 +349,7 @@ export default function Home() {
                 <tbody>
                   {data.map((item, index) => (
                     <tr
-                      key={index}
+                      key={item.id ?? index}
                       style={{ borderBottomColor: 'rgba(212, 175, 55, 0.1)' }}
                       className="border-b hover:bg-gray-800/50 transition-all"
                     >
@@ -403,12 +422,15 @@ export default function Home() {
       </main>
 
       {/* FOOTER */}
-      <footer style={{ color: THEME.grayText }} className="py-12 text-center text-sm border-t border-gray-700 mt-16">
+      <footer
+        style={{ color: THEME.grayText }}
+        className="py-12 text-center text-sm border-t border-gray-700 mt-16"
+      >
         <p className="mb-2">Sistem Absensi Masjid RFID • Powered by Next.js & Supabase</p>
         <p style={{ color: THEME.gold }}>✨ Jaga Istiqomah Ibadahmu ✨</p>
       </footer>
 
-      {/* GOOGLE FONTS LINK */}
+      {/* GOOGLE FONTS */}
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Inter:wght@400;500;600;700&display=swap');
         
@@ -425,28 +447,29 @@ export default function Home() {
 }
 
 /**
- * Format datetime to Indonesian locale with timezone
+ * Format datetime to Indonesian locale with WIB timezone
  * Handles invalid dates gracefully
  */
 function formatDateTime(waktu: string): string {
   try {
     const date = new Date(waktu);
 
-    // Validate the date
     if (isNaN(date.getTime())) {
-      return 'Invalid date';
+      return 'Tanggal tidak valid';
     }
 
-    return date.toLocaleString('id-ID', {
-      timeZone: 'Asia/Jakarta',
-      day: '2-digit',
-      month: 'long',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-    }) + ' WIB';
+    return (
+      date.toLocaleString('id-ID', {
+        timeZone: 'Asia/Jakarta',
+        day: '2-digit',
+        month: 'long',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+      }) + ' WIB'
+    );
   } catch {
-    return 'Invalid date';
+    return 'Tanggal tidak valid';
   }
 }
